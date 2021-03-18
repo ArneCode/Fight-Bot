@@ -1,4 +1,5 @@
 //let actions=[{name:"punch",damageMin:3,damageMax:40},{name:"defend",damageMin},{name:"kick"}]
+const Discord=require("discord.js")
 let types=require("./types.js")
 let games={}
 module.exports=(msg,bot)=>{
@@ -9,6 +10,7 @@ module.exports=(msg,bot)=>{
     return
   }
     console.log(content)
+    
   //console.log(msg.content)
   let game=games[channel.id]
   if(game){
@@ -20,30 +22,40 @@ module.exports=(msg,bot)=>{
     }else if(players[nextTurn]==author.id){
       pIdx=nextTurn
     }
+    if(pIdx!=turn){
+      return
+    }
+    let embed//=new Discord.MessageEmbed()
+    //embed.setColor('#0099ff')
     if(game.typesSet<2){
     if(pIdx==turn){
+      embed=new Discord.MessageEmbed()
       let player=players[pIdx]
       console.log(player.name,"chooses Type")
       if(content in types){
         let type=types[content]
-        channel.send(`${player.name} choose the type ${type.name}`)
+      embed.setDescription(`${player.name} is now a ${type.name}`)
+      channel.send(embed)
         player.type=type
         player.health=type.health
         type.init(player)
         game.typesSet++
         if(game.typesSet<2){
-    channel.send(`<@${players[nextTurn].id}> you need to choose your type. Possible types are ${Object.keys(types).join(", ")}`)
+          embed.setTitle(`${players[nextTurn].name}, please chose your type`)
+    embed.setDescription(`Possible types are ${Object.keys(types).join(", ")}`)
+    channel.send(embed)
         }else{
           fight(players[nextTurn],channel)
         }
         turn=nextTurn
         game.turn=nextTurn
       }else{
-        channel.send(`<@${player.id}> "${content}" is not a valid type. Valid types are: ${Object.keys(types).join(", ")}.`)
+        embed.setColor("#ff0000")
+        embed.setTitle(`${content} is not a valid type`)
+        embed.setDescription(`Valid types are: ${Object.keys(types).join(", ")}.`)
+        channel.send(embed)
       }
       return
-    }else{
-      console.log("type already set",players[pIdx].type)
     }
     return
     }
@@ -59,33 +71,50 @@ module.exports=(msg,bot)=>{
         if(content=="end"){
           channel.send("game ended")
           delete game[channel.id]
-          console.log("game after deletion",game)
+          //console.log("game after deletion",game)
         }
         return
       }
+      embed=new Discord.MessageEmbed()
       if(Math.random()<=0.004){
-        channel.send(`<@!${player.id}> Got a Heart Atack<:HP:821850786870198293>.`)
+        embed.setTitle(`${player.name} got a heart atack`)
+        embed.attachFiles(["./pics/heart-attack.jpg"])
+        embed.setImage("attachment://heart-attack.jpg")
         player.health=1
       }else{
         if(content in actions){
           let action = actions[content]
-          action.act(action,{player,other,channel})
+          action.act(action,{player,other,channel},embed)
+          for(let act of player.repeatedActs){
+            act(player,embed)
+          }
+          for(let act of other.repeatedActs){
+            act(other,embed)
+          }
         }else{
           return
         }
       }
-      channel.send(`<@!${player.id}> hat ${player.health}<:HP:821850786870198293>
-      <@!${other.id}> hat ${other.health}<:HP:821850786870198293>`)
+      embed.addFields(players.map(p=>{
+        return {
+          name:p.name+":",
+          inline:true,
+          value:`\t${p.health}<:HP:821850786870198293>`
+        }
+      }))
       if(other.health<=0){
+        channel.send(embed)
         channel.send(`<@!${player.id}> hat mit ${player.health}<:HP:821850786870198293> gewonnen`)
         delete games[channel.id]
         return
       }else if(player.health<=0){
+        channel.send(embed)
         channel.send(`<@!${other.id}>
         hat mit ${other.health}<:HP:821850786870198293> gewonnen`)
         delete games[channel.id]
         return
       }
+      channel.send(embed)
       game.turn=nextTurn
       if(players.length>0){
         fight(players[nextTurn],channel)
@@ -97,10 +126,12 @@ module.exports=(msg,bot)=>{
     //let otherIdStart=content.indexOf("<@")||content.indexOf("<@!")
     let other=msg.mentions.members.first()
     //console.log("found",other)
-    channel.send(`<@${other.id}>, du wurdest von ${member.displayName} herausgefordert.`)
+    channel.send(`<@${other.id}>, you have been challenged by ${member.displayName}.`)
     let players=[member_to_obj(member),member_to_obj(other)]
     let turn=Math.round(Math.random())
-    channel.send(`<@${players[turn].id}> you need to choose your type. Possible types are ${Object.keys(types).join(", ")}`)
+    let embed=new Discord.MessageEmbed()
+    embed.setDescription(`<@${players[turn].id}> you need to choose your type. Possible types are ${Object.keys(types).join(", ")}`)
+    channel.send(embed)
     games[channel.id]={
       players,
       turn,
@@ -112,7 +143,9 @@ module.exports=(msg,bot)=>{
 function fight(player,channel){
   //let actionsText=actions.map(a=>a.name).join(", ")
   let actionsText=Object.keys(player.type.actions).join(", ")
-  channel.send(`<@!${player.id}> was wilst du tun? Mögliche Aktionen sind: ${actionsText}`)
+  let embed=new Discord.MessageEmbed()
+  embed.setDescription(`<@!${player.id}> was wilst du tun? Mögliche Aktionen sind: ${actionsText}`)
+  channel.send(embed)
 }
 function member_to_obj(member){
   return {
@@ -121,6 +154,7 @@ function member_to_obj(member){
     health:0,
     armour:0,
     member,
+    repeatedActs:[],
     timesHealed:0
   }
 }
