@@ -1,32 +1,40 @@
 function punchAction(stats,info,embed){
   let {dmgs}=stats
-  let {player,other,channel}=info
+  let {player,other,channel,playerStats,otherStats}=info
   let dmg=randRange(...dmgs)
   embed.setTitle(`${player.name} punches <:PunchEmj:821827229163061348> ${other.name}`)
   embed.setDescription(`he deals ${other.name} ${dmg}<:HP:821850786870198293> of damage <:bang:822187290377584660>`)
+  playerStats.punches++
+  playerStats["damage dealt"]+=dmg
+  otherStats["health lost"]+=dmg
   /*channel.send(`${player.name}punches<:PunchEmj:821827229163061348> ${other.name} and deals ${dmg}<:HP:821850786870198293> of damage`)*/
   other.health-=dmg
 }
 function kickAction(stats,info,embed){
   let {dmgs,fallDmg,fallRate}=stats
-  let {player,other,channel}=info
+  let {player,other,channel,playerStats,otherStats}=info
   if(Math.random()<=fallRate){
     let ownDmg=randRange(...fallDmg)
     embed.setTitle(`${player.name} is useless`)
     embed.setDescription(`He fell on the ground <:bang:822187290377584660> and lost ${ownDmg}<:HP:821850786870198293>`)
     //channel.send(`${player.name} was completely useless and fell on the ground. He loses ${ownDmg}<:HP:821850786870198293>`)
     player.health-=ownDmg
+    playerStats["health lost"]+=ownDmg
+    playerStats["times fallen"]++
   }else{
   let dmg=randRange(...dmgs)
   embed.setTitle(`${player.name} kicks <:KickEmj:821827114906288178> ${other.name} <:bang:822187290377584660>`)
   embed.setDescription(`${player.name} kicks <:KickEmj:821827114906288178> ${other.name} in the face and deals ${dmg}<:HP:821850786870198293>`)
   //channel.send(` of damage`)
   other.health-=dmg
+  playerStats.kicks++
+  playerStats["damage dealt"]+=dmg
+  otherStats["health lost"]+=dmg
   }
 }
 function healAction(stats,info,embed){
   let {amounts,maxHeals}=stats
-  let {player,other,channel}=info
+  let {player,other,channel,playerStats}=info
   player.timesHealed++
   if((player.timesHealed)<=maxHeals){
     console.log(player.timesHealed+"/"+maxHeals)
@@ -35,6 +43,7 @@ function healAction(stats,info,embed){
   embed.setTitle(`${player.name} is healing`)
   embed.setDescription(`he gains ${amount}<:HP:821850786870198293>. He has already healed ${player.timesHealed}/${maxHeals} times.`)
   player.health+=amount
+  playerStats.heals++
   }else{
     //channel.send(`${player.name} you can only heal ${maxHeals} times`)
     embed.setDescription(`${player.name} you can only heal ${maxHeals} times`)
@@ -51,7 +60,7 @@ function chargeManaAction(stats,info,embed){
 }
 function shootMagic(stats,info,embed){
   let {minDmg}=stats
-  let {player,other,channel}=info
+  let {player,other,channel,playerStats,otherStats}=info
   let dmg=randRange(minDmg,player.mana)
   console.log("player",player)
   embed.setTitle(`${player.name} fires a ball of pure power <:fireprojectile:822191693575094272> and hits ${other.name}`)
@@ -59,31 +68,38 @@ function shootMagic(stats,info,embed){
   //channel.send(`${player.name} fired a ball of pure power and hit ${other.name} he dealed `)
   other.health-=dmg
   player.mana=10
+  playerStats["damage dealt"]+=dmg
+  otherStats["health lost"]+=dmg
 }
 function increasePoison(stats,info,embed){
   let {amounts}=stats
-  let {player,channel}=info
+  let {player,channel,playerStats}=info
   let amount=randRange(...amounts)
   player.poisonApplied+=amount
   embed.setTitle(`${player.name} Is poisoning his arrows`)
   embed.setDescription(`They will now deal ${player.poisonApplied} every round`)
+  //playerStats["poison applied"]+=amount
 }
 function shootPoisoned(stats,info,embed){
   let {dmgs}=stats
-  let {player,other,channel}=info
+  let {player,other,channel,playerStats,otherStats}=info
   let {poisonApplied}=player
   embed.setTitle(`${player.name} shoots ${other.name} with poisoned arrows`)
   embed.setDescription(`Aditionally he will now loose ${poisonApplied}<:HP:821850786870198293> per round`)
   player.poisonApplied=0
-  other.repeatedActs.push(poision.bind(poisonApplied))
+  other.repeatedActs.push(poision.bind({poisonApplied,playerStats,otherStats}))
+
 }
 function poision(player,embed){
+  let {playerStats,otherStats}=this
   console.log("this",this)
-  player.health-=this
-  embed.addField("poisoning "+player.name,`-${this}<:HP:821850786870198293>`)
+  player.health-=this.poisonApplied
+  embed.addField("poisoning "+player.name,`-${this.poisonApplied}<:HP:821850786870198293>`)
+  playerStats["damage dealt"]+=this.poisonApplied
+  otherStats["health lost"]+=this.poisonApplied
 }
 function rageKick(stats,info,embed){
-  let {player}=info
+  let {player,playerStats}=info
   let {rageDmg,rageFromHp}=stats
   let {alreadyRaged}=player
   if(player.health<=rageFromHp&&!alreadyRaged){
@@ -93,8 +109,8 @@ function rageKick(stats,info,embed){
     embed.setColor(`#ff0000`)
     embed.addField(`${player.name} is enraged so he will deal more damage.`)
     kickAction(stats,info,embed)
+    playerStats.ragekicks++
   }else{
-    console.log()
     kickAction(stats,info,embed)
   }
 }
@@ -106,13 +122,15 @@ function loadArrows(stats,info,embed){
   embed.setDescription(`He now has ${player.arrows} arrows`)
 }
 function shootParalysing(stats,info,embed){
-  let {player,other,channel}=info
+  let {player,other,channel,playerStats,otherStats}=info
   let {addedFallRate,punchNerf,dmgs,maxFallRate}=stats
   if(player.arrows>0){
     let {actions}=other.type
   player.arrows--
   let dmg=randRange(...dmgs)
   other.health-=dmg
+  playerStats["damage dealt"]+=dmg
+  otherStats["health lost"]+=dmg
   actions.kick.fallRate=Math.min(addedFallRate+actions.kick.fallRate,maxFallRate)
   actions.punch.dmgs=actions.punch.dmgs.map((elt,i)=>Math.max(elt-punchNerf,actions.punch.minDmgs[i]))
   //actions.punch.dmgs[1]-=Math.max(punchNerf,actions.punch.dmgs[0])
@@ -245,7 +263,7 @@ let types={
       },
       charge:{
         act:increasePoison,
-        amounts:[2,4]
+        amounts:[2,3]
       },
       shoot:{
         act:shootPoisoned,
