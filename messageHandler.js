@@ -1,8 +1,14 @@
 //let actions=[{name:"punch",damageMin:3,damageMax:40},{name:"defend",damageMin},{name:"kick"}]
+let heartAttackImgs=["heart-attack1.jpg","herzinfarkt2.png","herzinfarkt1.webp","herzinfarkt3.png","herzinfarkt4.png"]
 const Discord=require("discord.js")
 let types=require("./types.js")
 let games={}
-module.exports=(msg,bot)=>{
+let cluster
+module.exports={setCluster,handleMessage}
+function setCluster(_cluster){
+  cluster=_cluster
+}
+function handleMessage(msg,bot,cluster){
   let {content,author,member,channel}=msg
   content=content.toLowerCase()
   //console.log(content)
@@ -35,6 +41,8 @@ module.exports=(msg,bot)=>{
       if(content in types){
         let type=types[content]
       embed.setDescription(`${player.name} is now a ${type.name}`)
+      embed.attachFiles(["./pics/type-pics/"+type.pic])
+      embed.setImage("attachment://"+type.pic)
       channel.send(embed)
         player.type=type
         player.health=type.health
@@ -77,9 +85,11 @@ module.exports=(msg,bot)=>{
       }
       embed=new Discord.MessageEmbed()
       if(Math.random()<=0.004){
+        let img=heartAttackImgs.random()
         embed.setTitle(`${player.name} got a heart atack`)
-        embed.attachFiles(["./pics/heart-attack.jpg"])
-        embed.setImage("attachment://heart-attack.jpg")
+        let filename="./pics/heart-attack/"+img
+        embed.attachFiles([filename])//filename])
+        embed.setImage("attachment://"+img)
         player.health=1
       }else{
         if(content in actions){
@@ -125,6 +135,7 @@ module.exports=(msg,bot)=>{
   }else if(content.toLowerCase().startsWith("fight")){
     //let otherIdStart=content.indexOf("<@")||content.indexOf("<@!")
     let other=msg.mentions.members.first()
+    if(other){
     //console.log("found",other)
     channel.send(`<@${other.id}>, you have been challenged by ${member.displayName}.`)
     let players=[member_to_obj(member),member_to_obj(other)]
@@ -138,6 +149,22 @@ module.exports=(msg,bot)=>{
       typesSet:0
     }
     console.log("created new game",games)
+  }else{
+    content=content.substr("fight".length).trim()
+    console.log("content",content)
+    if(content.startsWith("start arena")){
+      let arena={
+        _id:channel.id,
+        fighters:{}
+      }
+      addDataOrReplace("arenas",channel.id,arena)
+      let embed=new Discord.MessageEmbed()
+      embed
+      .setTitle(`${msg.member.name} created a new arena in this channel.`)
+      .setDescription(`When fighting the stats will be saved and can be displayed when typing: fight arena info`)
+      channel.send(embed)
+    }
+  }
   }
 }
 function fight(player,channel){
@@ -160,4 +187,21 @@ function member_to_obj(member){
 }
 function randRange(min, max) { // min and max included 
   return Math.floor(Math.random() * (max - min + 1) + min);
+}
+async function addDataOrReplace(collectionName,id,data){
+  try{
+    await cluster
+    .db("fight-bot")
+    .collection(collectionName)
+    .deleteOne({_id:id})
+  }catch(err){
+    console.log("could not delete",err)
+  }
+  await cluster
+  .db("fight-bot")
+  .collection(collectionName)
+  .insertOne(data)
+}
+Array.prototype.random=function(){
+  return this[Math.floor(Math.random()*this.length)]
 }

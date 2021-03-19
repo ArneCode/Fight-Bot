@@ -1,13 +1,14 @@
 const Discord = require('discord.js');
-require("./connection.js")
+const cluster=require("./connection.js")
 const bot = new Discord.Client();
 const token = process.env.BOT_TOKEN_DISCORD;
-const handleMessage=require("./messageHandler.js")
+const {handleMessage,setCluster}=require("./messageHandler.js")
+setCluster(cluster)
 async function main(){
   bot.login(token)
   bot.on("message",msg=>{
     try{
-    handleMessage(msg,bot)
+    handleMessage(msg,bot,cluster)
     }catch(err){
       console.log("error occured while handeling message",err)
     }
