@@ -1,5 +1,6 @@
 const Discord = require('discord.js');
 const cluster=require("./connection.js")
+const { registerFont } = require('canvas');
 const bot = new Discord.Client();
 const token = process.env.BOT_TOKEN_DISCORD;
 const {handleMessage,setCluster}=require("./messageHandler.js")
@@ -15,3 +16,4 @@ async function main(){
   })
 }
 main();
+registerFont('./fonts/COMIC.TTF', { family: 'Comic Sans' });

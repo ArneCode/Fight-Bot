@@ -1,18 +1,19 @@
 function punchAction(stats,info,embed){
   let {dmgs}=stats
   let {player,other,channel,playerStats,otherStats}=info
+  console.log(player.name+" punch dmg",dmgs)
   let dmg=randRange(...dmgs)
   embed.setTitle(`${player.name} punches <:PunchEmj:821827229163061348> ${other.name}`)
   embed.setDescription(`he deals ${other.name} ${dmg}<:HP:821850786870198293> of damage <:bang:822187290377584660>`)
   playerStats.punches++
   playerStats["damage dealt"]+=dmg
   otherStats["health lost"]+=dmg
-  /*channel.send(`${player.name}punches<:PunchEmj:821827229163061348> ${other.name} and deals ${dmg}<:HP:821850786870198293> of damage`)*/
   other.health-=dmg
 }
 function kickAction(stats,info,embed){
   let {dmgs,fallDmg,fallRate}=stats
   let {player,other,channel,playerStats,otherStats}=info
+  console.log(player.name+" fall rate",fallRate)
   if(Math.random()<=fallRate){
     let ownDmg=randRange(...fallDmg)
     embed.setTitle(`${player.name} is useless`)
@@ -37,7 +38,6 @@ function healAction(stats,info,embed){
   let {player,other,channel,playerStats}=info
   player.timesHealed++
   if((player.timesHealed)<=maxHeals){
-    console.log(player.timesHealed+"/"+maxHeals)
   let amount=randRange(...amounts)
   //channel.send(`${player.name} gains ${amount}<:HP:821850786870198293>`)
   embed.setTitle(`${player.name} is healing`)
@@ -55,14 +55,11 @@ function chargeManaAction(stats,info,embed){
   player.mana=Math.round(player.mana*factor)
   embed.setTitle(`${player.name} is charging`)
   embed.setDescription(`he has increased his mana by a factor of ${factor}. Total mana: ${player.mana}<:mana:822191729704435792>`)
-  //channel.send(`${player.name} has increased his mana by a factor of ${factor}. Total mana:${player.mana}`)
-  console.log("player",player)
 }
 function shootMagic(stats,info,embed){
   let {minDmg}=stats
   let {player,other,channel,playerStats,otherStats}=info
   let dmg=randRange(minDmg,player.mana)
-  console.log("player",player)
   embed.setTitle(`${player.name} fires a ball of pure power <:fireprojectile:822191693575094272> and hits ${other.name}`)
   embed.setDescription(`he deals ${dmg}<:HP:821850786870198293><:bang:822187290377584660>`)
   //channel.send(`${player.name} fired a ball of pure power and hit ${other.name} he dealed `)
@@ -92,7 +89,6 @@ function shootPoisoned(stats,info,embed){
 }
 function poision(player,embed){
   let {playerStats,otherStats}=this
-  console.log("this",this)
   player.health-=this.poisonApplied
   embed.addField("poisoning "+player.name,`-${this.poisonApplied}<:HP:821850786870198293>`)
   playerStats["damage dealt"]+=this.poisonApplied
@@ -133,9 +129,7 @@ function shootParalysing(stats,info,embed){
   otherStats["health lost"]+=dmg
   actions.kick.fallRate=Math.min(addedFallRate+actions.kick.fallRate,maxFallRate)
   actions.punch.dmgs=actions.punch.dmgs.map((elt,i)=>Math.max(elt-punchNerf,actions.punch.minDmgs[i]))
-  //actions.punch.dmgs[1]-=Math.max(punchNerf,actions.punch.dmgs[0])
-
-  console.log("updated punch",actions.punch,punchNerf)
+  console.log("punch",actions.punch)
   embed.setTitle(`${player.name} hits ${other.name} with a paralysing arrow`)
   embed.setDescription(`${other.name} looses ${dmg}<:HP:821850786870198293>. Additionally he will be more likely to fall when kicking and his punched will do less damage. ${player.name} has now ${player.arrows} left in his quiver`)
   }else{
@@ -145,13 +139,13 @@ function shootParalysing(stats,info,embed){
 let types={
   tank:{
     name:"tank",
-    health:250,
+    health:275,
     pic:"tank.jpg",
     init:()=>null,
     actions:{
       punch:{
         act:punchAction,
-        dmgs:[5,20],
+        dmgs:[8,20],
         minDmgs:[5,5]
         },
       kick:{
@@ -210,7 +204,6 @@ let types={
     pic:"mage.jpg",
     init:player=>{
       player.mana=7.5
-      console.log("init!")
     },
     actions:{
       punch:{
@@ -276,7 +269,6 @@ function randRange(min, max) { // min and max included
   return Math.floor(Math.random() * (max - min + 1) + min);
 }
 function clone_entirely(obj){
-  //console.log("cloning",obj,typeof obj,obj.constructor)
   if(!obj){
     return obj
   }
@@ -293,7 +285,6 @@ function clone_entirely(obj){
     clone[attr]=clone_entirely(obj[attr])
     }
   }
-  //console.log("returning:",clone)
   return clone
 }
 module.exports=types

@@ -1,6 +1,6 @@
-//let actions=[{name:"punch",damageMin:3,damageMax:40},{name:"defend",damageMin},{name:"kick"}]
-let heartAttackImgs=["heart-attack1.jpg","herzinfarkt2.png","herzinfarkt1.webp","herzinfarkt3.png","herzinfarkt4.png"]
 const Discord=require("discord.js")
+const Canvas = require('canvas');
+let heartAttackImgs=["heart-attack1.jpg","herzinfarkt2.png","herzinfarkt1.webp","herzinfarkt3.png","herzinfarkt4.png"]
 let types=require("./types.js")
 let games={}
 let cluster
@@ -15,7 +15,6 @@ async function setCluster(_cluster){
   .collection("guilds")
   .findOne({_id:"known_guilds"})
   guilds=guildsInfo.guilds
-  console.log("guilds",guilds)
   },1000)
 }
 async function handleMessage(msg,bot,cluster){
@@ -23,7 +22,6 @@ async function handleMessage(msg,bot,cluster){
   let guildStats
   content=content.toLowerCase()
   if(guilds.indexOf(guild.id)==-1){
-    console.log(guild.id,typeof guild.id)
     await createGuildStats(guild.id)
     guilds.push(guild.id)
     await cluster
@@ -38,21 +36,28 @@ async function handleMessage(msg,bot,cluster){
     guildsStats[guild.id]=guildStats
   }
   }
-  console.log("guildStats",guildStats)
-  //console.log(content)
   if(msg.author.bot){
     return
   }
-    console.log(content)
+
     let playerStats
     if(author.id in guildStats.fighters){
       playerStats=guildStats.fighters[author.id]
     }else{
       playerStats=member_to_stats(member)
       guildStats.fighters[author.id]=playerStats
-      await setGuildStats(guild.id,guildStats)
+      setGuildStats(guild.id,guildStats)
     }
-  //console.log(msg.content)
+    if(!("games played" in playerStats)){
+      playerStats["games played"]=playerStats.kills+playerStats.deaths
+      setGuildStats(guild.id,guildStats)
+    }
+    if(!("level" in playerStats)){
+      playerStats.exp=playerStats.kills*2+playerStats.deaths
+      playerStats.level=0
+      await updateLevels(playerStats,channel,member)
+      setGuildStats(guild.id,guildStats)
+    }
   let game=games[channel.id]
   if(game){
     let {players,turn}=game
@@ -72,14 +77,13 @@ async function handleMessage(msg,bot,cluster){
     if(pIdx==turn){
       embed=new Discord.MessageEmbed()
       let player=players[pIdx]
-      console.log(player.name,"chooses Type")
       if(content in types){
         let type=types[content]
       embed.setDescription(`${player.name} is now a ${type.name}`)
       embed.attachFiles(["./pics/type-pics/"+type.pic])
       embed.setImage("attachment://"+type.pic)
       await channel.send(embed)
-        player.type=type
+        player.type=clone_entirely(type)
         player.health=type.health
         type.init(player)
         game.typesSet++
@@ -103,20 +107,15 @@ async function handleMessage(msg,bot,cluster){
     }
     return
     }
-    //console.log(players[turn].id,author.id,pIdx)
-      //console.log("new turn",{players,pIdx,turn,content})
     if(pIdx==turn){
-      //console.log("player entered")
       let player=players[pIdx]
       let other=players[(pIdx+1)%2]
       let otherStats=guildStats.fighters[other.id]
-      console.log("player",player.type,{pIdx,player})
       let {actions}=player.type
       if(!content in actions){
         if(content=="end"){
           channel.send("game ended")
           delete game[channel.id]
-          //console.log("game after deletion",game)
         }
         return
       }
@@ -156,6 +155,12 @@ async function handleMessage(msg,bot,cluster){
         delete games[channel.id]
         otherStats.deaths++
         playerStats.kills++
+        playerStats["games played"]++
+        otherStats["games played"]++
+        otherStats.exp++
+        playerStats.exp+=2
+        await updateLevels(playerStats,channel,player.member)
+        await updateLevels(otherStats,channel,other.member)
       setGuildStats(guild.id,guildStats)
         return
       }else if(player.health<=0){
@@ -165,6 +170,12 @@ async function handleMessage(msg,bot,cluster){
         delete games[channel.id]
         playerStats.deaths++
         otherStats.kills++
+        playerStats["games played"]++
+        otherStats["games played"]++
+        playerStats.exp++
+        otherStats.exp+=2
+        await updateLevels(playerStats,channel,player.member)
+        await updateLevels(otherStats,channel,other.member)
       setGuildStats(guild.id,guildStats)
         return
       }
@@ -179,6 +190,9 @@ async function handleMessage(msg,bot,cluster){
     //let otherIdStart=content.indexOf("<@")||content.indexOf("<@!")
     let other=msg.mentions.members.first()
     if(other){
+      if(other.id==member.id&&member.id!="769929940220116993"){
+        return
+      }
     channel.send(`<@${other.id}>, you have been challenged by ${member.displayName}.`)
     let players=[member_to_obj(member),member_to_obj(other)]
     let turn=Math.round(Math.random())
@@ -207,15 +221,23 @@ async function handleMessage(msg,bot,cluster){
       let embed=new Discord.MessageEmbed()
       embed.setTitle(`Stats of ${member.displayName}`)
       let fields=[]
+      let nonDisplays=["exp","level"]
       for(let name in playerStats){
-        fields.push({name:name+":",value:playerStats[name]})
+        if(!nonDisplays.includes(name)){
+          fields.push({name:name+":",value:playerStats[name]})
+        }
       }
       embed.addFields(fields)
+      await levelToImg(playerStats.exp,playerStats.level,embed,member)
       channel.send(embed)
     }else if(content.startsWith("leaderboard for")){
       content=content.substr("leaderboard for".length).trim()
       let fighters=Object.values(guildStats.fighters)
       if(content in fighters[0]&&content!="name"){
+        fighters=fighters.filter(f=>f[content])
+        if(fighters.length==0){
+          channel.send(`not enough players have stats for ${content}`)
+        }
         fighters=fighters.sort((b,a)=>{
           return a[content]-b[content]
         })
@@ -257,6 +279,7 @@ function randRange(min, max) { // min and max included
 }
 function member_to_stats(member){
   return {
+    "games played":0,
     kills:0,
     deaths:0,
     kicks:0,
@@ -271,7 +294,9 @@ function member_to_stats(member){
     "damage dealt":0,
     "health lost":0,
     ragekicks:0,
-    name:member.displayName
+    name:member.displayName,
+    exp:0,
+    level:0
   }
 }
 async function getGuildStats(guildId){
@@ -299,4 +324,68 @@ async function setGuildStats(guildId,stats){
 }
 Array.prototype.random=function(){
   return this[Math.floor(Math.random()*this.length)]
+}
+function clone_entirely(obj){
+  if(!obj){
+    return obj
+  }
+  let clone
+  if(obj.constructor==Array){
+    clone=[]
+  }else if((typeof obj)=="object"){
+    clone={}
+  }else{
+    return obj
+  }
+  for(let attr in obj){
+    if(obj.hasOwnProperty(attr)){
+    clone[attr]=clone_entirely(obj[attr])
+    }
+  }
+  return clone
+}
+async function updateLevels(playerStats,channel,player){
+  let {exp,level}=playerStats
+  while(exp>level+1){
+    exp-=level+1
+    level++
+    let embed=new Discord.MessageEmbed()
+    await levelToImg(exp,level,embed,player)
+    channel.send(`<@${player.id}> is now Level ${level}`)
+    channel.send(embed)
+  }
+  playerStats.exp=exp
+  playerStats.level=level
+}
+async function levelToImg(exp,level,embed,member){
+  const canvas = Canvas.createCanvas(300, 100);
+	const ctx = canvas.getContext('2d');
+  let chartWidth=0.5*canvas.width
+  let chartHeight=7
+  let chartOff=[10,-5]
+  let pxFromLast=chartWidth*exp/(level+1)
+  ctx.clearRect(0,0,canvas.width,canvas.height)
+  ctx.fillStyle="black"
+  ctx.fillRect(0,0,canvas.width,canvas.height)
+  ctx.fillStyle="blue"
+  ctx.fillRect(chartOff[0],chartOff[1]+canvas.height-chartHeight,chartWidth,chartOff[1]-chartHeight)
+    ctx.fillStyle = "#00fff3";
+  ctx.fillRect(chartOff[0],chartOff[1]+(canvas.height-chartHeight),pxFromLast,chartOff[1]-chartHeight)
+  ctx.fillStyle="yellow"
+  ctx.font="40px Comic Sans"
+  ctx.fillText("Level "+level,10,40)
+  ctx.fillStyle="#00fff3"
+  ctx.font="15px Comic Sans"
+  exp=String(exp)
+  ctx.fillText(exp,chartWidth+chartOff[0]+3,chartOff[1]+canvas.height-chartHeight)
+  ctx.fillStyle="grey"
+ ctx.fillText("/",chartWidth+chartOff[0]+3+exp.length*10,chartOff[1]+canvas.height-chartHeight)
+  ctx.fillStyle="blue"
+  ctx.fillText(level+1,chartWidth+chartOff[0]+3+(exp.length+1)*10,chartOff[1]+canvas.height-chartHeight)
+  const avatar = await Canvas.loadImage(member.user.displayAvatarURL({ format: 'png' }));
+	ctx.drawImage(avatar, canvas.width-70, 10, 50, 50);
+  let imgName=`level-${level}-exp-${exp}-${Math.round(Math.random()*10000)}.png`
+  const attachment = new Discord.MessageAttachment(canvas.toBuffer(), imgName);
+  embed.attachFiles([attachment])
+  embed.setImage("attachment://"+imgName)
 }
