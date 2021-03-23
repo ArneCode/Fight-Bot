@@ -1,5 +1,5 @@
 const Discord = require('discord.js');
-const cluster=require("./connection.js")
+const cluster=require("./connection.js");
 const { registerFont } = require('canvas');
 const bot = new Discord.Client();
 const token = process.env.BOT_TOKEN_DISCORD;
